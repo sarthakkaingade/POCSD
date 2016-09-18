@@ -39,21 +39,17 @@ class Memory(LoggingMixIn, Operations):
         self.files[path] = dict(st_mode=(S_IFREG | mode), st_nlink=1,
                                 st_size=0, st_ctime=time(), st_mtime=time(),
                                 st_atime=time())
-	pathSplit = path.split('/')
-        #print('len = ' + str(len(pathSplit)))
+        pathSplit = path.split('/')
         if len(pathSplit) == 2:
             self.data['/'].append(pathSplit[1])
-            print(self.data['/'])
         else:
             localPath = []
             num = 1
             while num < (len(pathSplit) - 1):
                 localPath.append('/')
                 localPath.append(pathSplit[num])
-                #print(num)
                 num += 1
             localPath = ''.join(localPath)
-            #print('localpath = ' + localPath)
             self.data[localPath].append(pathSplit[len(pathSplit) - 1])
         self.fd += 1    #ToDo - Handle fd
         return self.fd
@@ -107,9 +103,6 @@ class Memory(LoggingMixIn, Operations):
 
     def readdir(self, path, fh):
         dirlist = ['.', '..']
-        #if not self.data[path]:
-            #dirlist.append(self.data[path])
-        #print dirlist.join()
         return  dirlist + self.data[path]
 
     def readlink(self, path):
