@@ -40,10 +40,9 @@ class Memory(LoggingMixIn, Operations):
                                 st_size=0, st_ctime=time(), st_mtime=time(),
                                 st_atime=time())
 	pathSplit = path.split('/')
-        print('len = ' + str(len(pathSplit)))
+        #print('len = ' + str(len(pathSplit)))
         if len(pathSplit) == 2:
             self.data['/'].append(pathSplit[1])
-            print(1)
             print(self.data['/'])
         else:
             localPath = []
@@ -51,12 +50,11 @@ class Memory(LoggingMixIn, Operations):
             while num < (len(pathSplit) - 1):
                 localPath.append('/')
                 localPath.append(pathSplit[num])
-                print(num)
+                #print(num)
                 num += 1
             localPath = ''.join(localPath)
-            print('localpath = ' + localPath)
+            #print('localpath = ' + localPath)
             self.data[localPath].append(pathSplit[len(pathSplit) - 1])
-            #print(self.data[localPath])
         self.fd += 1    #ToDo - Handle fd
         return self.fd
 
@@ -90,10 +88,14 @@ class Memory(LoggingMixIn, Operations):
             self.files['/']['st_nlink'] += 1
         else:
             localPath = []
-            for num in range(1,(len(pathSplit) - 2)):
+            num = 1
+            while num < (len(pathSplit) - 1):
                 localPath.append('/')
                 localPath.append(pathSplit[num])
+                num += 1
+            localPath = ''.join(localPath)
             self.data[localPath].append(pathSplit[len(pathSplit) - 1])
+            self.files[localPath]['st_nlink'] += 1
 
 
     def open(self, path, flags):
