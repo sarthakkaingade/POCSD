@@ -118,6 +118,34 @@ class Memory(LoggingMixIn, Operations):
 
     def rename(self, old, new):
         self.files[new] = self.files.pop(old)
+        self.data[new] = self.data.pop(old)
+        oldpathSplit = old.split('/')
+        newpathSplit = new.split('/')
+        if len(oldpathSplit) == 2:
+            self.data['/'].remove(oldpathSplit[1])
+            self.data['/'].append(newpathSplit[1])
+        else:
+            localPath = []
+            num = 1
+            while num < (len(oldpathSplit) - 1):
+                localPath.append('/')
+                localPath.append(oldpathSplit[num])
+                num += 1
+            localPath = ''.join(localPath)
+            self.data[localPath].remove(oldpathSplit[len(oldpathSplit) - 1])
+            self.data[localPath].append(newpathSplit[len(newpathSplit) - 1])
+        # Replace if it is directory
+        if self.files[new]['st_nlink'] != 1:
+            for x in self.files:
+                oldx = x
+                print(x)
+                if oldpathSplit[len(oldpathSplit) - 1] in x.split('/'):
+                    print('1' + oldpathSplit[len(oldpathSplit) - 1])
+                    newx = x.replace(oldpathSplit[len(oldpathSplit) - 1],newpathSplit[len(newpathSplit) - 1])
+                    print('0 ' + newpathSplit[len(newpathSplit) - 1])
+                    print('2 ' + newx)
+                    self.files[newx] = self.files.pop(oldx)
+                    self.data[newx] = self.data.pop(oldx)
 
     def rmdir(self, path):
         self.files.pop(path)
