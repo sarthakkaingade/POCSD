@@ -24,6 +24,7 @@ class Memory(LoggingMixIn, Operations):
         now = time()
         self.files['/'] = dict(st_mode=(S_IFDIR | 0o755), st_ctime=now,
                                st_mtime=now, st_atime=now, st_nlink=2)
+	self.data['/'] = []
 
     def chmod(self, path, mode):
         self.files[path]['st_mode'] &= 0o770000
@@ -38,8 +39,25 @@ class Memory(LoggingMixIn, Operations):
         self.files[path] = dict(st_mode=(S_IFREG | mode), st_nlink=1,
                                 st_size=0, st_ctime=time(), st_mtime=time(),
                                 st_atime=time())
-
-        self.fd += 1
+	pathSplit = path.split('/')
+        print('len = ' + str(len(pathSplit)))
+        if len(pathSplit) == 2:
+            self.data['/'].append(pathSplit[1])
+            print(1)
+            print(self.data['/'])
+        else:
+            localPath = []
+            num = 1
+            while num < (len(pathSplit) - 1):
+                localPath.append('/')
+                localPath.append(pathSplit[num])
+                print(num)
+                num += 1
+            localPath = ''.join(localPath)
+            print('localpath = ' + localPath)
+            self.data[localPath].append(pathSplit[len(pathSplit) - 1])
+            #print(self.data[localPath])
+        self.fd += 1    #ToDo - Handle fd
         return self.fd
 
     def getattr(self, path, fh=None):
@@ -65,7 +83,18 @@ class Memory(LoggingMixIn, Operations):
                                 st_size=0, st_ctime=time(), st_mtime=time(),
                                 st_atime=time())
 
-        self.files['/']['st_nlink'] += 1
+        self.data[path] = []
+        pathSplit = path.split('/')
+        if len(pathSplit) == 2:
+            self.data['/'].append(pathSplit[1])
+            self.files['/']['st_nlink'] += 1
+        else:
+            localPath = []
+            for num in range(1,(len(pathSplit) - 2)):
+                localPath.append('/')
+                localPath.append(pathSplit[num])
+            self.data[localPath].append(pathSplit[len(pathSplit) - 1])
+
 
     def open(self, path, flags):
         self.fd += 1
@@ -75,7 +104,11 @@ class Memory(LoggingMixIn, Operations):
         return self.data[path][offset:offset + size]
 
     def readdir(self, path, fh):
-        return ['.', '..'] + [x[1:] for x in self.files if x != '/']
+        dirlist = ['.', '..']
+        #if not self.data[path]:
+            #dirlist.append(self.data[path])
+        #print dirlist.join()
+        return  dirlist + self.data[path]
 
     def readlink(self, path):
         return self.data[path]
