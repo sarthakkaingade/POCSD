@@ -148,8 +148,23 @@ class Memory(LoggingMixIn, Operations):
                     self.data[newx] = self.data.pop(oldx)
 
     def rmdir(self, path):
+        # Todo - Free RAM
         self.files.pop(path)
-        self.files['/']['st_nlink'] -= 1
+        self.data.pop(path)
+        pathSplit = path.split('/')
+        if len(pathSplit) == 2:
+            self.data['/'].remove(pathSplit[1])
+            self.files['/']['st_nlink'] -= 1
+        else:
+            localPath = []
+            num = 1
+            while num < (len(pathSplit) - 1):
+                localPath.append('/')
+                localPath.append(pathSplit[num])
+                num += 1
+            localPath = ''.join(localPath)
+            self.data[localPath].remove(pathSplit[len(pathSplit) - 1])
+            self.files[localPath]['st_nlink'] -= 1
 
     def setxattr(self, path, name, value, options, position=0):
         # Ignore options
