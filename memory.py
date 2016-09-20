@@ -121,36 +121,61 @@ class Memory(LoggingMixIn, Operations):
         self.data[new] = self.data.pop(old)
         oldpathSplit = old.split('/')
         newpathSplit = new.split('/')
-        if len(oldpathSplit) == 2:
-            self.data['/'].remove(oldpathSplit[1])
-            self.data['/'].append(newpathSplit[1])
+        # Check if renaming is done in same parent direcctory
+        if len(oldpathSplit) == len(newpathSplit):
+            if len(oldpathSplit) == 2:
+                self.data['/'].remove(oldpathSplit[1])
+                self.data['/'].append(newpathSplit[1])
+            else:
+                localPath = []
+                num = 1
+                while num < (len(oldpathSplit) - 1):
+                    localPath.append('/')
+                    localPath.append(oldpathSplit[num])
+                    num += 1
+                localPath = ''.join(localPath)
+                self.data[localPath].remove(oldpathSplit[len(oldpathSplit) - 1])
+                self.data[localPath].append(newpathSplit[len(newpathSplit) - 1])
+            # Replace if it is directory
+            if self.files[new]['st_nlink'] != 1:
+                for x in self.files:
+                    oldx = x
+                    localX = x.split('/')
+                    if len(localX) >= len(oldpathSplit):
+                        if oldpathSplit[len(oldpathSplit) - 1] == localX[len(oldpathSplit) - 1]:
+                            localX[len(oldpathSplit) - 1] = newpathSplit[len(newpathSplit) - 1]
+                            localPath = []
+                            num = 1
+                            while num < len(localX):
+                                localPath.append('/')
+                                localPath.append(localX[num])
+                                num += 1
+                            newx = ''.join(localPath)
+                            self.files[newx] = self.files.pop(oldx)
+                            self.data[newx] = self.data.pop(oldx)
         else:
-            localPath = []
-            num = 1
-            while num < (len(oldpathSplit) - 1):
-                localPath.append('/')
-                localPath.append(oldpathSplit[num])
-                num += 1
-            localPath = ''.join(localPath)
-            self.data[localPath].remove(oldpathSplit[len(oldpathSplit) - 1])
-            self.data[localPath].append(newpathSplit[len(newpathSplit) - 1])
-        # Replace if it is directory
-        if self.files[new]['st_nlink'] != 1:
-            for x in self.files:
-                oldx = x
-                localX = x.split('/')
-                if len(localX) >= len(oldpathSplit):
-                    if oldpathSplit[len(oldpathSplit) - 1] == localX[len(oldpathSplit) - 1]:
-                        localX[len(oldpathSplit) - 1] = newpathSplit[len(newpathSplit) - 1]
-                        localPath = []
-                        num = 1
-                        while num < len(localX):
-                            localPath.append('/')
-                            localPath.append(localX[num])
-                            num += 1
-                        newx = ''.join(localPath)
-                        self.files[newx] = self.files.pop(oldx)
-                        self.data[newx] = self.data.pop(oldx)
+            if len(oldpathSplit) == 2:
+                self.data['/'].remove(oldpathSplit[1])
+            else:
+                oldParentPath = []
+                num = 1
+                while num < (len(oldpathSplit) - 1):
+                    oldParentPath.append('/')
+                    oldParentPath.append(oldpathSplit[num])
+                    num += 1
+                oldParentPath = ''.join(oldParentPath)
+                self.data[oldParentPath].remove(oldpathSplit[len(oldpathSplit) - 1])
+            if len(newpathSplit) == 2:
+                self.data['/'].append(newpathSplit[1])
+            else:
+                newParentPath = []
+                num = 1
+                while num < (len(newpathSplit) - 1):
+                    newParentPath.append('/')
+                    newParentPath.append(newpathSplit[num])
+                    num += 1
+                newParentPath = ''.join(newParentPath)
+                self.data[newParentPath].append(newpathSplit[len(newpathSplit) - 1])
 
     def rmdir(self, path):
         # Todo - Free RAM
