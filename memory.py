@@ -176,6 +176,15 @@ class Memory(LoggingMixIn, Operations):
                     num += 1
                 newParentPath = ''.join(newParentPath)
                 self.data[newParentPath].append(newpathSplit[len(newpathSplit) - 1])
+            # If it is a directory
+            if self.files[new]['st_nlink'] != 1:
+                for x in self.files:
+                    if new not in x:
+                        oldx = x;
+                        newx = x.replace(old,new,1)
+                        self.files[newx] = self.files.pop(oldx)
+                        self.data[newx] = self.data.pop(oldx)
+
 
     def rmdir(self, path):
         # Todo - Free RAM
