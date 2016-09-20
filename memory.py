@@ -138,14 +138,19 @@ class Memory(LoggingMixIn, Operations):
         if self.files[new]['st_nlink'] != 1:
             for x in self.files:
                 oldx = x
-                print(x)
-                if oldpathSplit[len(oldpathSplit) - 1] in x.split('/'):
-                    print('1' + oldpathSplit[len(oldpathSplit) - 1])
-                    newx = x.replace(oldpathSplit[len(oldpathSplit) - 1],newpathSplit[len(newpathSplit) - 1])
-                    print('0 ' + newpathSplit[len(newpathSplit) - 1])
-                    print('2 ' + newx)
-                    self.files[newx] = self.files.pop(oldx)
-                    self.data[newx] = self.data.pop(oldx)
+                localX = x.split('/')
+                if len(localX) >= len(oldpathSplit):
+                    if oldpathSplit[len(oldpathSplit) - 1] == localX[len(oldpathSplit) - 1]:
+                        localX[len(oldpathSplit) - 1] = newpathSplit[len(newpathSplit) - 1]
+                        localPath = []
+                        num = 1
+                        while num < len(localX):
+                            localPath.append('/')
+                            localPath.append(localX[num])
+                            num += 1
+                        newx = ''.join(localPath)
+                        self.files[newx] = self.files.pop(oldx)
+                        self.data[newx] = self.data.pop(oldx)
 
     def rmdir(self, path):
         # Todo - Free RAM
