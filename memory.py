@@ -15,12 +15,13 @@ if not hasattr(__builtins__, 'bytes'):
     bytes = str
 
 class Memory(LoggingMixIn, Operations):
-    'Example memory filesystem. Supports only one level of files.'
+    'Example memory filesystem. Supports multiple level of files.'
 
     def __init__(self):
         self.files = {}
         self.data = defaultdict(bytes)
         self.fd = 0
+        self.BLKSIZE = 8
         now = time()
         self.files['/'] = dict(st_mode=(S_IFDIR | 0o755), st_ctime=now,
                                st_mtime=now, st_atime=now, st_nlink=2)
@@ -39,6 +40,7 @@ class Memory(LoggingMixIn, Operations):
         self.files[path] = dict(st_mode=(S_IFREG | mode), st_nlink=1,
                                 st_size=0, st_ctime=time(), st_mtime=time(),
                                 st_atime=time())
+        self.data[path] = []
         pathSplit = path.split('/')
         if len(pathSplit) == 2:
             self.data['/'].append(pathSplit[1])
@@ -99,7 +101,8 @@ class Memory(LoggingMixIn, Operations):
         return self.fd
 
     def read(self, path, size, offset, fh):
-        return self.data[path][offset:offset + size]
+        Data = ''.join(self.data[path])
+        return Data[offset:offset + size]
 
     def readdir(self, path, fh):
         dirlist = ['.', '..']
@@ -233,8 +236,13 @@ class Memory(LoggingMixIn, Operations):
         self.files[path]['st_mtime'] = mtime
 
     def write(self, path, data, offset, fh):
-        self.data[path] = self.data[path][:offset] + data
-        self.files[path]['st_size'] = len(self.data[path])
+        newDataInBlocks = []
+        oldData = ''.join(self.data[path])
+        newData = oldData[:offset] + data + oldData[offset + len(data):]
+        for i in range(0,len(newData),self.BLKSIZE):
+            newDataInBlocks.append(newData[i : i + self.BLKSIZE])
+        self.data[path] = newDataInBlocks
+        self.files[path]['st_size'] = len(newData)
         return len(data)
 
 
