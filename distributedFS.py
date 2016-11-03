@@ -20,8 +20,6 @@ class Memory(LoggingMixIn, Operations):
     'Example memory filesystem. Supports multiple level of files.'
 
     def __init__(self,MetaServerPort,DataServerPort):
-        self.files = {}
-        self.data = defaultdict(bytes)
         self.fd = 0
         self.BLKSIZE = 512
         self.MetaServerPort = MetaServerPort
@@ -232,7 +230,7 @@ class Memory(LoggingMixIn, Operations):
             # If it is a directory
             if metaDataOld['st_nlink'] != 1:
                 for x in self.MetaServerHandle.get_keys():
-                    if new not in x:
+                    if new != x[:len(new)]:
                         oldx = x;
                         newx = x.replace(old,new,1)
                         metaDataOldx = pickle.loads(self.MetaServerHandle.pop_entry(oldx))
