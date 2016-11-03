@@ -53,7 +53,7 @@ class Memory(LoggingMixIn, Operations):
         self.MetaServerHandle.put(path,pickle.dumps(metaData))
 
     def create(self, path, mode):
-        self.MetaServerHandle.put(path,pickle.dumps(dict(st_mode=(S_IFREG | mode), st_nlink=1, st_size=0, st_ctime=time(), st_mtime=time(), st_atime=time(), data = [])))
+        self.MetaServerHandle.put(path,pickle.dumps(dict(st_mode=(S_IFREG | mode), st_nlink=1, st_size=0, st_ctime=time(), st_mtime=time(), st_atime=time(), data = [], blocks = [])))
         pathSplit = path.split('/')
         if len(pathSplit) == 2:
             metaData = pickle.loads(self.MetaServerHandle.get('/'))
@@ -125,7 +125,8 @@ class Memory(LoggingMixIn, Operations):
         return self.fd
 
     def read(self, path, size, offset, fh):
-        Data = ''.join(self.data[path])
+        metaData = pickle.loads(self.MetaServerHandle.get(path))
+        Data = self.readData(path,metaData['blocks'])
         return Data[offset:offset + size]
 
     def readdir(self, path, fh):
@@ -134,7 +135,8 @@ class Memory(LoggingMixIn, Operations):
         return  dirlist + metaData['data']
 
     def readlink(self, path):
-        Data = ''.join(self.data[path])
+        metaData = pickle.loads(self.MetaServerHandle.get(path))
+        Data = self.readData(path,metaData['blocks'])
         return Data
 
     def removexattr(self, path, name):
@@ -253,22 +255,33 @@ class Memory(LoggingMixIn, Operations):
         return dict(f_bsize=512, f_blocks=4096, f_bavail=2048)
 
     def symlink(self, target, source):
-        self.files[target] = dict(st_mode=(S_IFLNK | 0o777), st_nlink=1,
-                                  st_size=len(source))
-
+        x = hash(path)
         newDataInBlocks = []
+        blocks = []
+        j = 1
         for i in range(0,len(source),self.BLKSIZE):
             newDataInBlocks.append(source[i : i + self.BLKSIZE])
-        self.data[target] = newDataInBlocks
+            blocks.append((x + j - 1) % len(self.DataServerPort))
+            j += 1;
+        self.writeData(target,newDataInBlocks,blocks)
+        self.MetaServerHandle.put(target,pickle.dumps(dict(st_mode=(S_IFLNK | 0o777), st_nlink=1, st_size=len(source), blocks = blocks)))
 
     def truncate(self, path, length, fh=None):
         newDataInBlocks = []
-        oldData = ''.join(self.data[path])
+        blocks = []
+        x = hash(path)
+        metaData = pickle.loads(self.MetaServerHandle.get(path))
+        oldData = self.readData(path,metaData['blocks'])
         newData = oldData[:length].ljust(length,'\x00')
+        j = 1
         for i in range(0,len(newData),self.BLKSIZE):
             newDataInBlocks.append(newData[i : i + self.BLKSIZE])
-        self.data[path] = newDataInBlocks
-        self.files[path]['st_size'] = length
+            blocks.append((x + j - 1) % len(self.DataServerPort))
+            j += 1;
+        self.writeData(path,newDataInBlocks,blocks)
+        metaData['st_size'] = len(newData)
+        metaData['blocks'] = blocks
+        self.MetaServerHandle.put(path,pickle.dumps(metaData))
 
     def unlink(self, path):
         self.files.pop(path)
@@ -283,14 +296,35 @@ class Memory(LoggingMixIn, Operations):
 
     def write(self, path, data, offset, fh):
         newDataInBlocks = []
-        oldData = ''.join(self.data[path])
+        blocks = []
+        x = hash(path)
+        metaData = pickle.loads(self.MetaServerHandle.get(path))
+        if len(metaData['blocks']) == 0:
+            oldData = ''
+        else:
+            oldData = self.readData(path,metaData['blocks'])
         newData = oldData[:offset].ljust(offset,'\x00') + data + oldData[offset + len(data):]
+        j = 1
         for i in range(0,len(newData),self.BLKSIZE):
             newDataInBlocks.append(newData[i : i + self.BLKSIZE])
-        self.data[path] = newDataInBlocks
-        self.files[path]['st_size'] = len(newData)
+            blocks.append((x + j - 1) % len(self.DataServerPort))
+            j += 1;
+
+        self.writeData(path,newDataInBlocks,blocks)
+        metaData['st_size'] = len(newData)
+        metaData['blocks'] = blocks
+        self.MetaServerHandle.put(path,pickle.dumps(metaData))
         return len(data)
 
+    def writeData(self,path,newDataInBlocks,blocks):
+        for i in range(0,len(newDataInBlocks)):
+            self.DataServerHandles[blocks[i]].put(path + str(i),newDataInBlocks[i])
+
+    def readData(self,path,blocks):
+        result = ''
+        for i in range(0,len(blocks)):
+            result += self.DataServerHandles[blocks[i]].get(path + str(i))
+        return result
 
 if __name__ == '__main__':
     if len(argv) < 4:
