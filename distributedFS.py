@@ -17,11 +17,15 @@ if not hasattr(__builtins__, 'bytes'):
 class Memory(LoggingMixIn, Operations):
     'Example memory filesystem. Supports multiple level of files.'
 
-    def __init__(self):
+    def __init__(self,MetaServerPort,DataServerPort):
         self.files = {}
         self.data = defaultdict(bytes)
         self.fd = 0
         self.BLKSIZE = 512
+        self.MetaServerPort = MetaServerPort
+        self.DataServerPort = DataServerPort
+        print(self.MetaServerPort)
+        print(self.DataServerPort)
         now = time()
         self.files['/'] = dict(st_mode=(S_IFDIR | 0o755), st_ctime=now,
                                st_mtime=now, st_atime=now, st_nlink=2)
@@ -256,9 +260,14 @@ class Memory(LoggingMixIn, Operations):
 
 
 if __name__ == '__main__':
-    if len(argv) != 2:
-        print('usage: %s <mountpoint>' % argv[0])
+    if len(argv) < 4:
+        print('usage: %s <mountpoint> <metaserver port> <dataserver port1> ...' % argv[0])
         exit(1)
 
+    MetaServerPort = int(argv[2])
+    DataServerPort = []
+    for i in range(3,len(argv)):
+        DataServerPort.append(int(argv[i]))
+
     logging.basicConfig(level=logging.DEBUG)
-    fuse = FUSE(Memory(), argv[1], foreground=True, debug=True)
+    fuse = FUSE(Memory(MetaServerPort,DataServerPort), argv[1], foreground=True, debug=True)
