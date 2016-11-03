@@ -305,7 +305,25 @@ class Memory(LoggingMixIn, Operations):
         self.MetaServerHandle.put(path,pickle.dumps(metaData))
 
     def unlink(self, path):
-        self.MetaServerHandle.pop_entry(path)
+        metaData = pickle.loads(self.MetaServerHandle.pop_entry(path))
+        if (metaData['st_mode'] & S_IFREG) == S_IFREG:
+            self.rmData(path,metaData['blocks'])
+            pathSplit = path.split('/')
+            if len(pathSplit) == 2:
+                metaData = pickle.loads(self.MetaServerHandle.get('/'))
+                metaData['data'].remove(pathSplit[1])
+                self.MetaServerHandle.put('/',pickle.dumps(metaData))
+            else:
+                localPath = []
+                num = 1
+                while num < (len(pathSplit) - 1):
+                    localPath.append('/')
+                    localPath.append(pathSplit[num])
+                    num += 1
+                localPath = ''.join(localPath)
+                metaData = pickle.loads(self.MetaServerHandle.get(localPath))
+                metaData['data'].remove(pathSplit[len(pathSplit) - 1])
+                self.MetaServerHandle.put(localPath,pickle.dumps(metaData))
 
     def utimens(self, path, times=None):
         now = time()
