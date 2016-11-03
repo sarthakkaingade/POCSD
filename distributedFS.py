@@ -98,15 +98,14 @@ class Memory(LoggingMixIn, Operations):
         return attrs.keys()
 
     def mkdir(self, path, mode):
-        self.files[path] = dict(st_mode=(S_IFDIR | mode), st_nlink=2,
-                                st_size=0, st_ctime=time(), st_mtime=time(),
-                                st_atime=time())
+        self.MetaServerHandle.put(path,pickle.dumps(dict(st_mode=(S_IFDIR | mode), st_ctime=time(),st_mtime=time(), st_atime=time(), st_nlink=2, st_size=0, data = [])))
 
-        self.data[path] = []
         pathSplit = path.split('/')
         if len(pathSplit) == 2:
-            self.data['/'].append(pathSplit[1])
-            self.files['/']['st_nlink'] += 1
+            metaData = pickle.loads(self.MetaServerHandle.get('/'))
+            metaData['data'].append(pathSplit[1])
+            metaData['st_nlink'] += 1
+            self.MetaServerHandle.put('/',pickle.dumps(metaData))
         else:
             localPath = []
             num = 1
@@ -115,8 +114,10 @@ class Memory(LoggingMixIn, Operations):
                 localPath.append(pathSplit[num])
                 num += 1
             localPath = ''.join(localPath)
-            self.data[localPath].append(pathSplit[len(pathSplit) - 1])
-            self.files[localPath]['st_nlink'] += 1
+            metaData = pickle.loads(self.MetaServerHandle.get(localPath))
+            metaData['data'].append(pathSplit[len(pathSplit) - 1])
+            metaData['st_nlink'] += 1
+            self.MetaServerHandle.put(localPath,pickle.dumps(metaData))
 
 
     def open(self, path, flags):
@@ -129,17 +130,23 @@ class Memory(LoggingMixIn, Operations):
 
     def readdir(self, path, fh):
         dirlist = ['.', '..']
-        return  dirlist + self.data[path]
+        metaData = pickle.loads(self.MetaServerHandle.get(path))
+        return  dirlist + metaData['data']
 
     def readlink(self, path):
         Data = ''.join(self.data[path])
         return Data
 
     def removexattr(self, path, name):
-        attrs = self.files[path].get('attrs', {})
+        if self.MetaServerHandle.get(path) == -1:
+            return ''   # Should return ENOATTR
+        metaData = pickle.loads(self.MetaServerHandle.get(path))
+        attrs = metaData.get('attrs', {})
 
         try:
             del attrs[name]
+            metaData.set('attrs', attrs)
+            self.MetaServerHandle.put(path,pickle.dumps(metaData))
         except KeyError:
             pass        # Should return ENOATTR
 
@@ -234,8 +241,13 @@ class Memory(LoggingMixIn, Operations):
 
     def setxattr(self, path, name, value, options, position=0):
         # Ignore options
-        attrs = self.files[path].setdefault('attrs', {})
+        if self.MetaServerHandle.get(path) == -1:
+            return ''   # Should return ENOATTR
+        metaData = pickle.loads(self.MetaServerHandle.get(path))
+        attrs = metaData.setdefault('attrs', {})
         attrs[name] = value
+        metaData.set('attrs', attrs)
+        self.MetaServerHandle.put(path,pickle.dumps(metaData))
 
     def statfs(self, path):
         return dict(f_bsize=512, f_blocks=4096, f_bavail=2048)
@@ -264,8 +276,10 @@ class Memory(LoggingMixIn, Operations):
     def utimens(self, path, times=None):
         now = time()
         atime, mtime = times if times else (now, now)
-        self.files[path]['st_atime'] = atime
-        self.files[path]['st_mtime'] = mtime
+        metaData = pickle.loads(self.MetaServerHandle.get(path))
+        metaData['st_atime'] = atime
+        metaData['st_mtime'] = mtime
+        self.MetaServerHandle.put(path,pickle.dumps(metaData))
 
     def write(self, path, data, offset, fh):
         newDataInBlocks = []
