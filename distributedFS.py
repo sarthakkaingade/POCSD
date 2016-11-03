@@ -152,15 +152,20 @@ class Memory(LoggingMixIn, Operations):
             pass        # Should return ENOATTR
 
     def rename(self, old, new):
-        self.files[new] = self.files.pop(old)
-        self.data[new] = self.data.pop(old)
+        metaDataOld = pickle.loads(self.MetaServerHandle.pop_entry(old))
+        metaDataNew = metaDataOld
+        if metaDataOld['st_nlink'] == 1:
+            metaDataNew = self.replaceFileData(new,old,metaDataOld)
+        self.MetaServerHandle.put(new,pickle.dumps(metaDataNew))
         oldpathSplit = old.split('/')
         newpathSplit = new.split('/')
         # Check if renaming is done in same parent direcctory
         if len(oldpathSplit) == len(newpathSplit):
             if len(oldpathSplit) == 2:
-                self.data['/'].remove(oldpathSplit[1])
-                self.data['/'].append(newpathSplit[1])
+                metaData = pickle.loads(self.MetaServerHandle.get('/'))
+                metaData['data'].remove(oldpathSplit[1])
+                metaData['data'].append(newpathSplit[1])
+                self.MetaServerHandle.put('/',pickle.dumps(metaData))
             else:
                 localPath = []
                 num = 1
@@ -169,11 +174,13 @@ class Memory(LoggingMixIn, Operations):
                     localPath.append(oldpathSplit[num])
                     num += 1
                 localPath = ''.join(localPath)
-                self.data[localPath].remove(oldpathSplit[len(oldpathSplit) - 1])
-                self.data[localPath].append(newpathSplit[len(newpathSplit) - 1])
+                metaData = pickle.loads(self.MetaServerHandle.get(localPath))
+                metaData['data'].remove(oldpathSplit[len(oldpathSplit) - 1])
+                metaData['data'].append(newpathSplit[len(newpathSplit) - 1])
+                self.MetaServerHandle.put(localPath,pickle.dumps(metaData))
             # Replace if it is directory
-            if self.files[new]['st_nlink'] != 1:
-                for x in self.files:
+            if metaDataOld['st_nlink'] != 1:
+                for x in self.MetaServerHandle.get_keys():
                     oldx = x
                     localX = x.split('/')
                     if len(localX) >= len(oldpathSplit):
@@ -186,11 +193,16 @@ class Memory(LoggingMixIn, Operations):
                                 localPath.append(localX[num])
                                 num += 1
                             newx = ''.join(localPath)
-                            self.files[newx] = self.files.pop(oldx)
-                            self.data[newx] = self.data.pop(oldx)
+                            metaDataOldx = pickle.loads(self.MetaServerHandle.pop_entry(oldx))
+                            metaDataNewx= metaDataOldx
+                            if metaDataOldx['st_nlink'] == 1:
+                                metaDataNewx = self.replaceFileData(newx,oldx,metaDataOldx)
+                            self.MetaServerHandle.put(newx,pickle.dumps(metaDataNewx))
         else:
             if len(oldpathSplit) == 2:
-                self.data['/'].remove(oldpathSplit[1])
+                metaData = pickle.loads(self.MetaServerHandle.get('/'))
+                metaData['data'].remove(oldpathSplit[1])
+                self.MetaServerHandle.put('/',pickle.dumps(metaData))
             else:
                 oldParentPath = []
                 num = 1
@@ -199,9 +211,13 @@ class Memory(LoggingMixIn, Operations):
                     oldParentPath.append(oldpathSplit[num])
                     num += 1
                 oldParentPath = ''.join(oldParentPath)
-                self.data[oldParentPath].remove(oldpathSplit[len(oldpathSplit) - 1])
+                metaData = pickle.loads(self.MetaServerHandle.get(oldParentPath))
+                metaData['data'].remove(oldpathSplit[len(oldpathSplit) - 1])
+                self.MetaServerHandle.put(oldParentPath,pickle.dumps(metaData))
             if len(newpathSplit) == 2:
-                self.data['/'].append(newpathSplit[1])
+                metaData = pickle.loads(self.MetaServerHandle.get('/'))
+                metaData['data'].append(newpathSplit[1])
+                self.MetaServerHandle.put('/',pickle.dumps(metaData))
             else:
                 newParentPath = []
                 num = 1
@@ -210,15 +226,20 @@ class Memory(LoggingMixIn, Operations):
                     newParentPath.append(newpathSplit[num])
                     num += 1
                 newParentPath = ''.join(newParentPath)
-                self.data[newParentPath].append(newpathSplit[len(newpathSplit) - 1])
+                metaData = pickle.loads(self.MetaServerHandle.get(newParentPath))
+                metaData['data'].append(newpathSplit[len(newpathSplit) - 1])
+                self.MetaServerHandle.put(newParentPath,pickle.dumps(metaData))
             # If it is a directory
-            if self.files[new]['st_nlink'] != 1:
-                for x in self.files:
+            if metaDataOld['st_nlink'] != 1:
+                for x in self.MetaServerHandle.get_keys():
                     if new not in x:
                         oldx = x;
                         newx = x.replace(old,new,1)
-                        self.files[newx] = self.files.pop(oldx)
-                        self.data[newx] = self.data.pop(oldx)
+                        metaDataOldx = pickle.loads(self.MetaServerHandle.pop_entry(oldx))
+                        metaDataNewx= metaDataOldx
+                        if metaDataOldx['st_nlink'] == 1:
+                            metaDataNewx = self.replaceFileData(newx,oldx,metaDataOldx)
+                        self.MetaServerHandle.put(newx,pickle.dumps(metaDataNewx))
 
 
     def rmdir(self, path):
@@ -286,7 +307,7 @@ class Memory(LoggingMixIn, Operations):
         self.MetaServerHandle.put(path,pickle.dumps(metaData))
 
     def unlink(self, path):
-        self.files.pop(path)
+        self.MetaServerHandle.pop_entry(path)
 
     def utimens(self, path, times=None):
         now = time()
@@ -327,6 +348,28 @@ class Memory(LoggingMixIn, Operations):
         for i in range(0,len(blocks)):
             result += self.DataServerHandles[blocks[i]].get(path + str(i))
         return result
+
+    def rmData(self,path,blocks):
+        for i in range(0,len(blocks)):
+            self.DataServerHandles[blocks[i]].pop_entry(path + str(i))
+
+    def replaceFileData(self,new,old,metaDataOld):
+        metaDataNew = metaDataOld
+        Data = self.readData(old,metaDataOld['blocks'])
+        self.rmData(old,metaDataOld['blocks'])
+        DataInBlocks = []
+        blocks = []
+        x = hash(new)
+        j = 1
+        for i in range(0,len(Data),self.BLKSIZE):
+            DataInBlocks.append(Data[i : i + self.BLKSIZE])
+            blocks.append((x + j - 1) % len(self.DataServerPort))
+            j += 1;
+
+        self.writeData(new,DataInBlocks,blocks)
+        metaDataNew['st_size'] = len(Data)
+        metaDataNew['blocks'] = blocks
+        return metaDataNew
 
 if __name__ == '__main__':
     if len(argv) < 4:

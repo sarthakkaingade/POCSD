@@ -74,6 +74,9 @@ class SimpleHT:
   def pop_entry(self,key):
     return self.data.pop(key)
 
+  def get_keys(self):
+    return self.data.keys()
+
 def main():
   optlist, args = getopt.getopt(sys.argv[1:], "", ["port=", "test"])
   ol={}
@@ -100,6 +103,7 @@ def serve(port):
   file_server.register_function(sht.read_file)
   file_server.register_function(sht.write_file)
   file_server.register_function(sht.pop_entry)
+  file_server.register_function(sht.get_keys)
   file_server.serve_forever()
 
 # Execute the xmlrpc in a thread ... needed for testing
