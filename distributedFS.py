@@ -37,7 +37,6 @@ class Memory(LoggingMixIn, Operations):
         now = time()
         self.MetaServerHandle.put('/',pickle.dumps(dict(st_mode=(S_IFDIR | 0o755), st_ctime=now,st_mtime=now, st_atime=now, st_nlink=2, data = [])))
         print(pickle.loads(self.MetaServerHandle.get('/')))
-	self.data['/'] = []
 
     def chmod(self, path, mode):
         metaData = pickle.loads(self.MetaServerHandle.get(path))
@@ -224,12 +223,13 @@ class Memory(LoggingMixIn, Operations):
 
     def rmdir(self, path):
         # Todo - Free RAM
-        self.files.pop(path)
-        self.data.pop(path)
+        self.MetaServerHandle.pop_entry(path)
         pathSplit = path.split('/')
         if len(pathSplit) == 2:
-            self.data['/'].remove(pathSplit[1])
-            self.files['/']['st_nlink'] -= 1
+            metaData = pickle.loads(self.MetaServerHandle.get('/'))
+            metaData['data'].remove(pathSplit[1])
+            metaData['st_nlink'] -= 1
+            self.MetaServerHandle.put('/',pickle.dumps(metaData))
         else:
             localPath = []
             num = 1
@@ -238,8 +238,10 @@ class Memory(LoggingMixIn, Operations):
                 localPath.append(pathSplit[num])
                 num += 1
             localPath = ''.join(localPath)
-            self.data[localPath].remove(pathSplit[len(pathSplit) - 1])
-            self.files[localPath]['st_nlink'] -= 1
+            metaData = pickle.loads(self.MetaServerHandle.get(localPath))
+            metaData['data'].remove(pathSplit[len(pathSplit) - 1])
+            metaData['st_nlink'] -= 1
+            self.MetaServerHandle.put(localPath,pickle.dumps(metaData))
 
     def setxattr(self, path, name, value, options, position=0):
         # Ignore options
