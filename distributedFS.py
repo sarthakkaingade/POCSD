@@ -3,6 +3,8 @@ from __future__ import print_function, absolute_import, division
 
 import logging
 
+import xmlrpclib, pickle
+
 from collections import defaultdict
 from errno import ENOENT
 from stat import S_IFDIR, S_IFLNK, S_IFREG
@@ -26,9 +28,15 @@ class Memory(LoggingMixIn, Operations):
         self.DataServerPort = DataServerPort
         print(self.MetaServerPort)
         print(self.DataServerPort)
+        self.MetaServerHandle = xmlrpclib.ServerProxy('http://localhost:' + str(self.MetaServerPort) + '/')
+        self.DataServerHandles = []
+        for i in range(0,len(self.DataServerPort)):
+            self.DataServerHandles.append(xmlrpclib.ServerProxy('http://localhost:' + str(self.DataServerPort[i]) + '/'))
+        print(self.MetaServerHandle)
+        print(self.DataServerHandles)
         now = time()
-        self.files['/'] = dict(st_mode=(S_IFDIR | 0o755), st_ctime=now,
-                               st_mtime=now, st_atime=now, st_nlink=2)
+        self.MetaServerHandle.put('/',pickle.dumps(dict(st_mode=(S_IFDIR | 0o755), st_ctime=now,st_mtime=now, st_atime=now, st_nlink=2)))
+        print(pickle.loads(self.MetaServerHandle.get('/')))
 	self.data['/'] = []
 
     def chmod(self, path, mode):

@@ -41,18 +41,13 @@ class SimpleHT:
 
   # Retrieve something from the HT
   def get(self, key):
-    # Default return value
-    rv = {}
-    # If the key is in the data structure, return properly formated results
-    key = key.data
-    if key in self.data:
-      rv = Binary(self.data[key])
-    return rv
+    # return value
+    return self.data[key]
 
   # Insert something into the HT
   def put(self, key, value):
     # Remove expired entries
-    self.data[key.data] = value.data
+    self.data[key] = value
     return True
 
   # Load contents from a file
@@ -91,7 +86,7 @@ def main():
 
 # Start the xmlrpc server
 def serve(port):
-  file_server = SimpleXMLRPCServer.SimpleXMLRPCServer(('', port))
+  file_server = SimpleXMLRPCServer.SimpleXMLRPCServer(("localhost", port))
   file_server.register_introspection_functions()
   sht = SimpleHT()
   file_server.register_function(sht.get)
