@@ -35,27 +35,30 @@ class Memory(LoggingMixIn, Operations):
         print(self.MetaServerHandle)
         print(self.DataServerHandles)
         now = time()
-        self.MetaServerHandle.put('/',pickle.dumps(dict(st_mode=(S_IFDIR | 0o755), st_ctime=now,st_mtime=now, st_atime=now, st_nlink=2)))
+        self.MetaServerHandle.put('/',pickle.dumps(dict(st_mode=(S_IFDIR | 0o755), st_ctime=now,st_mtime=now, st_atime=now, st_nlink=2, data = [])))
         print(pickle.loads(self.MetaServerHandle.get('/')))
 	self.data['/'] = []
 
     def chmod(self, path, mode):
-        self.files[path]['st_mode'] &= 0o770000
-        self.files[path]['st_mode'] |= mode
+        metaData = pickle.loads(self.MetaServerHandle.get(path))
+        metaData['st_mode'] &= 0o770000
+        metaData['st_mode'] |= mode
+        self.MetaServerHandle.put(path,pickle.dumps(metaData))
         return 0
 
     def chown(self, path, uid, gid):
-        self.files[path]['st_uid'] = uid
-        self.files[path]['st_gid'] = gid
+        metaData = pickle.loads(self.MetaServerHandle.get(path))
+        metaData['st_uid'] = uid
+        metaData['st_gid'] = gid
+        self.MetaServerHandle.put(path,pickle.dumps(metaData))
 
     def create(self, path, mode):
-        self.files[path] = dict(st_mode=(S_IFREG | mode), st_nlink=1,
-                                st_size=0, st_ctime=time(), st_mtime=time(),
-                                st_atime=time())
-        self.data[path] = []
+        self.MetaServerHandle.put(path,pickle.dumps(dict(st_mode=(S_IFREG | mode), st_nlink=1, st_size=0, st_ctime=time(), st_mtime=time(), st_atime=time(), data = [])))
         pathSplit = path.split('/')
         if len(pathSplit) == 2:
-            self.data['/'].append(pathSplit[1])
+            metaData = pickle.loads(self.MetaServerHandle.get('/'))
+            metaData['data'].append(pathSplit[1])
+            self.MetaServerHandle.put('/',pickle.dumps(metaData))
         else:
             localPath = []
             num = 1
@@ -64,18 +67,23 @@ class Memory(LoggingMixIn, Operations):
                 localPath.append(pathSplit[num])
                 num += 1
             localPath = ''.join(localPath)
-            self.data[localPath].append(pathSplit[len(pathSplit) - 1])
+            metaData = pickle.loads(self.MetaServerHandle.get(localPath))
+            metaData['data'].append(pathSplit[len(pathSplit) - 1])
+            self.MetaServerHandle.put(localPath,pickle.dumps(metaData))
         self.fd += 1    #ToDo - Handle fd
         return self.fd
 
     def getattr(self, path, fh=None):
-        if path not in self.files:
+        if self.MetaServerHandle.get(path) == -1:
             raise FuseOSError(ENOENT)
 
-        return self.files[path]
+        return pickle.loads(self.MetaServerHandle.get(path))
 
     def getxattr(self, path, name, position=0):
-        attrs = self.files[path].get('attrs', {})
+        if self.MetaServerHandle.get(path) == -1:
+            return ''   # Should return ENOATTR
+        metaData = pickle.loads(self.MetaServerHandle.get(path))
+        attrs = metaData.get('attrs', {})
 
         try:
             return attrs[name]
@@ -83,7 +91,10 @@ class Memory(LoggingMixIn, Operations):
             return ''       # Should return ENOATTR
 
     def listxattr(self, path):
-        attrs = self.files[path].get('attrs', {})
+        if self.MetaServerHandle.get(path) == -1:
+            return ''   # Should return ENOATTR
+        metaData = pickle.loads(self.MetaServerHandle.get(path))
+        attrs = metaData.get('attrs', {})
         return attrs.keys()
 
     def mkdir(self, path, mode):

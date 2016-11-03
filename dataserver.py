@@ -42,6 +42,8 @@ class SimpleHT:
   # Retrieve something from the HT
   def get(self, key):
     # return value
+    if key not in self.data:
+        return -1
     return self.data[key]
 
   # Insert something into the HT
