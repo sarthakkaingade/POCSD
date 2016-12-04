@@ -363,7 +363,29 @@ class Memory(LoggingMixIn, Operations):
     def readData(self,path,blocks):
         result = ''
         for i in range(0,len(blocks)):
-            result += self.DataServerHandles[blocks[i]].get(path + str(i))
+            localblock1 = self.DataServerHandles[blocks[i]].get(path + str(i))
+            localblock2 = self.DataServerHandles[(blocks[i] + 1) % len(self.DataServerPort)].get(path + str(i))
+            # Both the copies are lost
+            if (localblock1 == -1) and (localblock2 == -1):
+                result = '**ERROR** - Two adjacent servers lost their respective persistance storage blocks. Cannot RECOVER.'
+                break
+            # Both the copies are present
+            elif (localblock1 != -1) and (localblock2 != -1):
+                #ToDo - Handle Data Corruption
+                result += localblock1
+            # First copy lost
+            elif (localblock1 == -1):
+                #ToDo - Handle Data Corruption
+                self.DataServerHandles[blocks[i]].put(path + str(i),localblock2) # Update First Copy
+                result += localblock2
+            # Second copy lost
+            elif (localblock2 == -1):
+                #ToDo - Handle Data Corruption
+                self.DataServerHandles[(blocks[i] + 1) % len(self.DataServerPort)].put(path + str(i),localblock1) # Update First Copy
+                result += localblock1
+            else:
+                result = '**ERROR** - Unhandled Exception'
+                break
         return result
 
     def rmData(self,path,blocks):
