@@ -157,7 +157,7 @@ class Memory(LoggingMixIn, Operations):
         self.MetaServerHandle.put(new,pickle.dumps(metaDataNew))
         oldpathSplit = old.split('/')
         newpathSplit = new.split('/')
-        # Check if renaming is done in same parent direcctory
+        # Check if renaming is done in same parent directory
         if len(oldpathSplit) == len(newpathSplit):
             if len(oldpathSplit) == 2:
                 metaData = pickle.loads(self.MetaServerHandle.get('/'))
@@ -273,7 +273,7 @@ class Memory(LoggingMixIn, Operations):
         self.MetaServerHandle.put(path,pickle.dumps(metaData))
 
     def statfs(self, path):
-        return dict(f_bsize=512, f_blocks=4096, f_bavail=2048)
+        return dict(f_bsize=self.BLKSIZE, f_blocks=4096, f_bavail=2048)
 
     def symlink(self, target, source):
         x = hash(path)
@@ -358,6 +358,7 @@ class Memory(LoggingMixIn, Operations):
     def writeData(self,path,newDataInBlocks,blocks):
         for i in range(0,len(newDataInBlocks)):
             self.DataServerHandles[blocks[i]].put(path + str(i),newDataInBlocks[i])
+            self.DataServerHandles[(blocks[i] + 1) % len(self.DataServerPort)].put(path + str(i),newDataInBlocks[i])
 
     def readData(self,path,blocks):
         result = ''
@@ -368,6 +369,7 @@ class Memory(LoggingMixIn, Operations):
     def rmData(self,path,blocks):
         for i in range(0,len(blocks)):
             self.DataServerHandles[blocks[i]].pop_entry(path + str(i))
+            self.DataServerHandles[(blocks[i] + 1) % len(self.DataServerPort)].pop_entry(path + str(i))
 
     def replaceFileData(self,new,old,metaDataOld):
         metaDataNew = metaDataOld
