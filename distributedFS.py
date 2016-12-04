@@ -3,7 +3,7 @@ from __future__ import print_function, absolute_import, division
 
 import logging
 
-import xmlrpclib, pickle
+import xmlrpclib, pickle, hashlib
 
 from collections import defaultdict
 from errno import ENOENT
@@ -21,7 +21,7 @@ class Memory(LoggingMixIn, Operations):
 
     def __init__(self,MetaServerPort,DataServerPort):
         self.fd = 0
-        self.BLKSIZE = 512
+        self.BLKSIZE = 512 - 32 # Last 32 bytes are reserved for md5sum
         self.MetaServerPort = MetaServerPort
         self.DataServerPort = DataServerPort
         print(self.MetaServerPort)
@@ -357,8 +357,8 @@ class Memory(LoggingMixIn, Operations):
 
     def writeData(self,path,newDataInBlocks,blocks):
         for i in range(0,len(newDataInBlocks)):
-            self.DataServerHandles[blocks[i]].put(path + str(i),newDataInBlocks[i])
-            self.DataServerHandles[(blocks[i] + 1) % len(self.DataServerPort)].put(path + str(i),newDataInBlocks[i])
+            self.DataServerHandles[blocks[i]].put(path + str(i),newDataInBlocks[i] + hashlib.md5(newDataInBlocks[i]).hexdigest())
+            self.DataServerHandles[(blocks[i] + 1) % len(self.DataServerPort)].put(path + str(i),newDataInBlocks[i] + hashlib.md5(newDataInBlocks[i]).hexdigest())
 
     def readData(self,path,blocks):
         result = ''
@@ -371,18 +371,45 @@ class Memory(LoggingMixIn, Operations):
                 break
             # Both the copies are present
             elif (localblock1 != -1) and (localblock2 != -1):
-                #ToDo - Handle Data Corruption
-                result += localblock1
+                # Verify Checksum
+                if (localblock1[len(localblock1) - 32:] == hashlib.md5(localblock1[:len(localblock1) - 32]).hexdigest()) and (localblock2[len(localblock2) - 32:] == hashlib.md5(localblock2[:len(localblock2) - 32]).hexdigest()):
+                    result += localblock1[:len(localblock1) - 32]
+                elif (localblock1[len(localblock1) - 32:] != hashlib.md5(localblock1[:len(localblock1) - 32]).hexdigest()) and (localblock2[len(localblock2) - 32:] != hashlib.md5(localblock2[:len(localblock2) - 32]).hexdigest()):
+                    for i in range(0,60):
+                        print('**ERROR** - Both the copies are corrupted.')
+                        time.sleep(30)
+                    break
+                elif (localblock1[len(localblock1) - 32:] != hashlib.md5(localblock1[:len(localblock1) - 32]).hexdigest()):
+                    print('First copy is corrupted. Recovering....')
+                    self.DataServerHandles[blocks[i]].put(path + str(i),localblock2) # Update First Copy
+                    result += localblock2[:len(localblock2) - 32]
+                elif (localblock2[len(localblock2) - 32:] != hashlib.md5(localblock2[:len(localblock2) - 32]).hexdigest()):
+                    print('Second copy is corrupted. Recovering....')
+                    self.DataServerHandles[(blocks[i] + 1) % len(self.DataServerPort)].put(path + str(i),localblock1) # Update Second Copy
+                    result += localblock1[:len(localblock1) - 32]
+                else:
+                    result = '**ERROR** - Unhandled Exception while verifying checksum'
+                    break
             # First copy lost
             elif (localblock1 == -1):
-                #ToDo - Handle Data Corruption
+                # Verify Checksum
+                if (localblock2[len(localblock2) - 32:] != hashlib.md5(localblock2[:len(localblock2) - 32]).hexdigest()):
+                    for i in range(0,60):
+                        print('**ERROR** - First copy is absent and Second copy is corrupted.')
+                        time.sleep(30)
+                    break
                 self.DataServerHandles[blocks[i]].put(path + str(i),localblock2) # Update First Copy
-                result += localblock2
+                result += localblock2[:len(localblock2) - 32]
             # Second copy lost
             elif (localblock2 == -1):
-                #ToDo - Handle Data Corruption
-                self.DataServerHandles[(blocks[i] + 1) % len(self.DataServerPort)].put(path + str(i),localblock1) # Update First Copy
-                result += localblock1
+                # Verify Checksum
+                if (localblock1[len(localblock1) - 32:] != hashlib.md5(localblock1[:len(localblock1) - 32]).hexdigest()):
+                    for i in range(0,60):
+                        print('**ERROR** - Second copy is absent and First copy is corrupted.')
+                        time.sleep(30)
+                    break
+                self.DataServerHandles[(blocks[i] + 1) % len(self.DataServerPort)].put(path + str(i),localblock1) # Update Second Copy
+                result += localblock1[:len(localblock1) - 32]
             else:
                 result = '**ERROR** - Unhandled Exception'
                 break
