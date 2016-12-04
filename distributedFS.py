@@ -3,7 +3,7 @@ from __future__ import print_function, absolute_import, division
 
 import logging
 
-import xmlrpclib, pickle, hashlib
+import xmlrpclib, pickle, hashlib, socket
 
 from collections import defaultdict
 from errno import ENOENT
@@ -357,14 +357,42 @@ class Memory(LoggingMixIn, Operations):
 
     def writeData(self,path,newDataInBlocks,blocks):
         for i in range(0,len(newDataInBlocks)):
-            self.DataServerHandles[blocks[i]].put(path + str(i),newDataInBlocks[i] + hashlib.md5(newDataInBlocks[i]).hexdigest())
-            self.DataServerHandles[(blocks[i] + 1) % len(self.DataServerPort)].put(path + str(i),newDataInBlocks[i] + hashlib.md5(newDataInBlocks[i]).hexdigest())
+            # Store First copy of block
+            connection = False
+            while connection is False:
+                try:
+                    # Store block
+                    connection = self.DataServerHandles[blocks[i]].put(path + str(i),newDataInBlocks[i] + hashlib.md5(newDataInBlocks[i]).hexdigest())
+                except socket.error:
+                    print('WRITE - Connection to Data Server at port ' + str(self.DataServerPort[blocks[i]]) + ' is lost.')
+                    print('Trying to re-connect.....')
+                    sleep(5)
+
+            # Store Second copy of block
+            connection = False
+            while connection is False:
+                try:
+                    # Store block
+                    connection = self.DataServerHandles[(blocks[i] + 1) % len(self.DataServerPort)].put(path + str(i),newDataInBlocks[i] + hashlib.md5(newDataInBlocks[i]).hexdigest())
+                except socket.error:
+                    print('WRITE - Connection to Data Server at port ' + str(self.DataServerPort[(blocks[i] + 1) % len(self.DataServerPort)]) + ' is lost.')
+                    print('Trying to re-connect.....')
+                    sleep(5)
+
 
     def readData(self,path,blocks):
         result = ''
         for i in range(0,len(blocks)):
-            localblock1 = self.DataServerHandles[blocks[i]].get(path + str(i))
-            localblock2 = self.DataServerHandles[(blocks[i] + 1) % len(self.DataServerPort)].get(path + str(i))
+            try:
+                localblock1 = self.DataServerHandles[blocks[i]].get(path + str(i))
+            except socket.error:
+                print('**WARNING** READ - Connection to Data Server at port ' + str(self.DataServerPort[blocks[i]]) + ' is lost.')
+                localblock1 = -1
+            try:
+                localblock2 = self.DataServerHandles[(blocks[i] + 1) % len(self.DataServerPort)].get(path + str(i))
+            except socket.error:
+                print('**WARNING** READ - Connection to Data Server at port ' + str(self.DataServerPort[(blocks[i] + 1) % len(self.DataServerPort)]) + ' is lost.')
+                localblock2 = -1
             # Both the copies are lost
             if (localblock1 == -1) and (localblock2 == -1):
                 result = '**ERROR** - Two adjacent servers lost their respective persistance storage blocks. Cannot RECOVER.'
@@ -382,11 +410,19 @@ class Memory(LoggingMixIn, Operations):
                     break
                 elif (localblock1[len(localblock1) - 32:] != hashlib.md5(localblock1[:len(localblock1) - 32]).hexdigest()):
                     print('First copy is corrupted. Recovering....')
-                    self.DataServerHandles[blocks[i]].put(path + str(i),localblock2) # Update First Copy
+                    # Update First Copy
+                    try:
+                        self.DataServerHandles[blocks[i]].put(path + str(i),localblock2)
+                    except socket.error:
+                        print('**WARNING** - Data server at port ' + str(self.DataServerPort[blocks[i]]) + ' is absent while data correction.')
                     result += localblock2[:len(localblock2) - 32]
                 elif (localblock2[len(localblock2) - 32:] != hashlib.md5(localblock2[:len(localblock2) - 32]).hexdigest()):
                     print('Second copy is corrupted. Recovering....')
-                    self.DataServerHandles[(blocks[i] + 1) % len(self.DataServerPort)].put(path + str(i),localblock1) # Update Second Copy
+                    # Update Second Copy
+                    try:
+                        self.DataServerHandles[(blocks[i] + 1) % len(self.DataServerPort)].put(path + str(i),localblock1)
+                    except socket.error:
+                        print('**WARNING** - Data server at port ' + str(self.DataServerPort[(blocks[i] + 1) % len(self.DataServerPort)]) + ' is absent while data correction.')
                     result += localblock1[:len(localblock1) - 32]
                 else:
                     result = '**ERROR** - Unhandled Exception while verifying checksum'
@@ -400,7 +436,11 @@ class Memory(LoggingMixIn, Operations):
                         print(result)
                         sleep(2)
                     break
-                self.DataServerHandles[blocks[i]].put(path + str(i),localblock2) # Update First Copy
+                # Update First Copy
+                try:
+                    self.DataServerHandles[blocks[i]].put(path + str(i),localblock2)
+                except socket.error:
+                    print('**WARNING** - Data server at port ' + str(self.DataServerPort[blocks[i]]) + ' is absent while data correction.')
                 result += localblock2[:len(localblock2) - 32]
             # Second copy lost
             elif (localblock2 == -1):
@@ -411,7 +451,11 @@ class Memory(LoggingMixIn, Operations):
                         print(result)
                         sleep(2)
                     break
-                self.DataServerHandles[(blocks[i] + 1) % len(self.DataServerPort)].put(path + str(i),localblock1) # Update Second Copy
+                # Update Second Copy
+                try:
+                    self.DataServerHandles[(blocks[i] + 1) % len(self.DataServerPort)].put(path + str(i),localblock1)
+                except socket.error:
+                    print('**WARNING** - Data server at port ' + str(self.DataServerPort[(blocks[i] + 1) % len(self.DataServerPort)]) + ' is absent while data correction.')
                 result += localblock1[:len(localblock1) - 32]
             else:
                 result = '**ERROR** - Unhandled Exception'
@@ -420,8 +464,14 @@ class Memory(LoggingMixIn, Operations):
 
     def rmData(self,path,blocks):
         for i in range(0,len(blocks)):
-            self.DataServerHandles[blocks[i]].pop_entry(path + str(i))
-            self.DataServerHandles[(blocks[i] + 1) % len(self.DataServerPort)].pop_entry(path + str(i))
+            try:
+                self.DataServerHandles[blocks[i]].pop_entry(path + str(i))
+            except socket.error:
+                print('**WARNING** - Data Removel: Data server at port ' + str(self.DataServerPort[blocks[i]]) + ' is absent.')
+            try:
+                self.DataServerHandles[(blocks[i] + 1) % len(self.DataServerPort)].pop_entry(path + str(i))
+            except socket.error:
+                print('**WARNING** - Data Removal: Data server at port ' + str(self.DataServerPort[(blocks[i] + 1) % len(self.DataServerPort)]) + ' is absent.')
 
     def replaceFileData(self,new,old,metaDataOld):
         metaDataNew = metaDataOld
