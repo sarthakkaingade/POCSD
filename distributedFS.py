@@ -9,7 +9,7 @@ from collections import defaultdict
 from errno import ENOENT
 from stat import S_IFDIR, S_IFLNK, S_IFREG
 from sys import argv, exit
-from time import time
+from time import time, sleep
 
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
@@ -375,9 +375,10 @@ class Memory(LoggingMixIn, Operations):
                 if (localblock1[len(localblock1) - 32:] == hashlib.md5(localblock1[:len(localblock1) - 32]).hexdigest()) and (localblock2[len(localblock2) - 32:] == hashlib.md5(localblock2[:len(localblock2) - 32]).hexdigest()):
                     result += localblock1[:len(localblock1) - 32]
                 elif (localblock1[len(localblock1) - 32:] != hashlib.md5(localblock1[:len(localblock1) - 32]).hexdigest()) and (localblock2[len(localblock2) - 32:] != hashlib.md5(localblock2[:len(localblock2) - 32]).hexdigest()):
-                    for i in range(0,60):
-                        print('**ERROR** - Both the copies are corrupted.')
-                        time.sleep(30)
+                    result = '**ERROR** - Both the copies are corrupted.'
+                    for i in range(0,2):
+                        print(result)
+                        sleep(2)
                     break
                 elif (localblock1[len(localblock1) - 32:] != hashlib.md5(localblock1[:len(localblock1) - 32]).hexdigest()):
                     print('First copy is corrupted. Recovering....')
@@ -394,9 +395,10 @@ class Memory(LoggingMixIn, Operations):
             elif (localblock1 == -1):
                 # Verify Checksum
                 if (localblock2[len(localblock2) - 32:] != hashlib.md5(localblock2[:len(localblock2) - 32]).hexdigest()):
-                    for i in range(0,60):
-                        print('**ERROR** - First copy is absent and Second copy is corrupted.')
-                        time.sleep(30)
+                    result = '**ERROR** - First copy is absent and Second copy is corrupted.'
+                    for i in range(0,2):
+                        print(result)
+                        sleep(2)
                     break
                 self.DataServerHandles[blocks[i]].put(path + str(i),localblock2) # Update First Copy
                 result += localblock2[:len(localblock2) - 32]
@@ -404,9 +406,10 @@ class Memory(LoggingMixIn, Operations):
             elif (localblock2 == -1):
                 # Verify Checksum
                 if (localblock1[len(localblock1) - 32:] != hashlib.md5(localblock1[:len(localblock1) - 32]).hexdigest()):
-                    for i in range(0,60):
-                        print('**ERROR** - Second copy is absent and First copy is corrupted.')
-                        time.sleep(30)
+                    result = '**ERROR** - Second copy is absent and First copy is corrupted.'
+                    for i in range(0,2):
+                        print(result)
+                        sleep(2)
                     break
                 self.DataServerHandles[(blocks[i] + 1) % len(self.DataServerPort)].put(path + str(i),localblock1) # Update Second Copy
                 result += localblock1[:len(localblock1) - 32]

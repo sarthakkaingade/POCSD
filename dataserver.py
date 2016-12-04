@@ -97,6 +97,17 @@ class SimpleHT:
     self.data.close()
     return localkeys
 
+  def corrupt(self,path):
+    self.data = shelve.open(self.filename)
+    for x in self.data.keys():
+        if path == x[:len(path)]:
+            local = self.data[x]
+            self.data[x] = local[:len(local) - 7] + 'sarthak'
+            self.data.close()
+            return True
+    self.data.close()
+    return False
+
 def main():
   optlist, args = getopt.getopt(sys.argv[1:], "", ["port=", "test"])
   ol={}
@@ -126,6 +137,7 @@ def serve(port,filename):
   file_server.register_function(sht.write_file)
   file_server.register_function(sht.pop_entry)
   file_server.register_function(sht.get_keys)
+  file_server.register_function(sht.corrupt)
   file_server.serve_forever()
 
 # Execute the xmlrpc in a thread ... needed for testing
