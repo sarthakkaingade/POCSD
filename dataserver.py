@@ -27,55 +27,75 @@ Changelog:
     0.03 - Modified to remove timeout mechanism for data.
 """
 
-import sys, SimpleXMLRPCServer, getopt, pickle, time, threading, xmlrpclib, unittest
+import sys, SimpleXMLRPCServer, getopt, pickle, shelve, time, threading, xmlrpclib, unittest
 from datetime import datetime, timedelta
 from xmlrpclib import Binary
 
 # Presents a HT interface
 class SimpleHT:
-  def __init__(self):
-    self.data = {}
+  def __init__(self,filename):
+    self.filename = filename
+    self.data = shelve.open(filename)
+    self.data.close()
 
   def count(self):
-    return len(self.data)
+    self.data = shelve.open(self.filename)
+    length = len(self.data.keys())
+    self.data.close()
+    return length
 
   # Retrieve something from the HT
   def get(self, key):
+    self.data = shelve.open(self.filename)
     # return value
-    if key not in self.data:
-        return -1
-    return self.data[key]
+    if self.data.has_key(key):
+        localdata = self.data[key]
+    else:
+        localdata = -1
+    self.data.close()
+    return localdata
 
   # Insert something into the HT
   def put(self, key, value):
-    # Remove expired entries
+    self.data = shelve.open(self.filename)
     self.data[key] = value
+    self.data.close()
     return True
 
   # Load contents from a file
   def read_file(self, filename):
     f = open(filename.data, "rb")
-    self.data = pickle.load(f)
+    #self.data = pickle.load(f)
     f.close()
     return True
 
   # Write contents to a file
   def write_file(self, filename):
     f = open(filename.data, "wb")
-    pickle.dump(self.data, f)
+    #pickle.dump(self.data, f)
     f.close()
     return True
 
   # Print the contents of the hashtable
   def print_content(self):
-    print self.data
+    #print self.data
     return True
 
   def pop_entry(self,key):
-    return self.data.pop(key)
+    self.data = shelve.open(self.filename)
+    if self.data.has_key(key):
+        entry = self.data[key]
+        del self.data[key]
+    else:
+      entry = ''
+    self.data.close()
+    return entry
 
   def get_keys(self):
-    return self.data.keys()
+    self.data = shelve.open(self.filename)
+    localkeys = self.data.keys()
+    self.data.close()
+    return localkeys
 
 def main():
   optlist, args = getopt.getopt(sys.argv[1:], "", ["port=", "test"])
@@ -91,13 +111,14 @@ def main():
     unittest.main()
     return
   print('Dataserver ' + str(int(sys.argv[1])) + ' started at port ' + str(port))
-  serve(port)
+  filename = sys.path[0] + '/datastore' + str(port)
+  serve(port,filename)
 
 # Start the xmlrpc server
-def serve(port):
+def serve(port,filename):
   file_server = SimpleXMLRPCServer.SimpleXMLRPCServer(("localhost", port))
   file_server.register_introspection_functions()
-  sht = SimpleHT()
+  sht = SimpleHT(filename)
   file_server.register_function(sht.get)
   file_server.register_function(sht.put)
   file_server.register_function(sht.print_content)
