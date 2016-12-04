@@ -388,8 +388,9 @@ class Memory(LoggingMixIn, Operations):
         return metaDataNew
 
 if __name__ == '__main__':
-    if len(argv) < 4:
-        print('usage: %s <mountpoint> <metaserver port> <dataserver port1> ...' % argv[0])
+    if len(argv) < 6:
+        print('usage: %s <mountpoint> <metaserver port> <dataserver port0> <dataserver port1> <dataserver port2> ...' % argv[0])
+        print('Number of dataservers should be greater than 2')
         exit(1)
 
     MetaServerPort = int(argv[2])

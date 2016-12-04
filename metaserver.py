@@ -83,13 +83,14 @@ def main():
   for k,v in optlist:
     ol[k] = v
 
-  port = 51234
+  port = int(sys.argv[1])
   if "--port" in ol:
     port = int(ol["--port"])
   if "--test" in ol:
     sys.argv.remove("--test")
     unittest.main()
     return
+  print('Metaserver started at port ' + str(port))
   serve(port)
 
 # Start the xmlrpc server

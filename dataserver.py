@@ -83,13 +83,14 @@ def main():
   for k,v in optlist:
     ol[k] = v
 
-  port = 51234
+  port = int(sys.argv[int(sys.argv[1]) + 2])
   if "--port" in ol:
     port = int(ol["--port"])
   if "--test" in ol:
     sys.argv.remove("--test")
     unittest.main()
     return
+  print('Dataserver ' + str(int(sys.argv[1])) + ' started at port ' + str(port))
   serve(port)
 
 # Start the xmlrpc server
